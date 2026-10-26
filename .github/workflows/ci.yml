@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root123456
+          MYSQL_DATABASE: coinwise_test
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Lint with Ruff
+        run: ruff check .
+      - name: Type check with mypy
+        run: mypy . --ignore-missing-imports
+      - name: Test with pytest
+        run: pytest --cov=. --cov-report=term-missing -x -v
+        env:
+          DATABASE_URL_MASTER: mysql+aiomysql://root:root123456@localhost:3306/coinwise_test
+          DATABASE_URL_SLAVE: mysql+aiomysql://root:root123456@localhost:3306/coinwise_test
+          REDIS_URL: redis://localhost:6379/0
+          JWT_SECRET: test-jwt-secret-key-for-ci-at-least-32-chars
+          ENCRYPTION_KEY: test-encryption-key-for-ci-32chars!!
+          DATA_ENCRYPTION_KEY: test-data-enc-key-for-ci-32chars!
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint with ESLint
+        run: npx eslint src/ --ext .js,.vue
+      - name: Format check with Prettier
+        run: npx prettier --check src/
+      - name: Unit tests
+        run: npx vitest run --coverage
+      - name: Build
+        run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E tests
+        run: npx playwright test --config=e2e/playwright.config.js

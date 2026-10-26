@@ -1,0 +1,31 @@
+name: Deploy
+
+on:
+  # 仅手动触发，避免每次 push main 自动部署。
+  # 目前的部署流程仍是模板，修复镜像发布/服务器拉取逻辑后再考虑自动触发。
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build -t coinwise-backend:latest ./backend
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+      - name: Deploy via docker-compose
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "mkdir -p /app/coinwise/docker/nginx /app/coinwise/docker/mysql-master /app/coinwise/docker/mysql-slave /app/coinwise/docker/redis-master /app/coinwise/docker/redis-sentinel"
+          scp -o StrictHostKeyChecking=no docker-compose.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/app/coinwise/
+          scp -o StrictHostKeyChecking=no -r docker/* ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/app/coinwise/docker/
+          scp -o StrictHostKeyChecking=no -r frontend/dist ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/app/coinwise/frontend/
+          ssh -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            cd /app/coinwise
+            docker compose pull
+            docker compose up -d --force-recreate
+            docker system prune -af
+          EOF

@@ -1,0 +1,15 @@
+Alembic 数据库迁移管理
+========================
+
+创建迁移
+    alembic revision --autogenerate -m "描述"
+
+应用迁移
+    alembic upgrade head
+
+回滚
+    alembic downgrade -1
+
+查看状态
+    alembic current
+    alembic history

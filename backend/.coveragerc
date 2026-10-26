@@ -1,0 +1,12 @@
+[run]
+source = .
+omit = tests/*,alembic/versions/*,__pycache__/*
+
+[report]
+exclude_lines =
+    if __name__ == .__main__.:
+    pragma: no cover
+    raise NotImplementedError
+
+[html]
+directory = coverage_html
